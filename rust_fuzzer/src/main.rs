@@ -45,6 +45,7 @@ use fuzzer::FuzzConfig;
 use fuzzer::SnapshotPlacement;
 use libnyx::NyxConfig;
 use libnyx::NyxProcess;
+use libnyx::NyxProcessRole;
 
 
 fn main() {
@@ -137,6 +138,10 @@ fn main() {
         1
     };
 
+    if threads > 1 {
+        nyx_config.set_process_role(NyxProcessRole::Parent);
+    }
+
     let file = File::open(&nyx_config.spec_path()).expect(&format!(
         "couldn't open spec (File not found: {}",
         nyx_config.spec_path()
@@ -150,7 +155,7 @@ fn main() {
     let core_ids = core_affinity::get_core_ids().unwrap();
     println!("[!] fuzzer: spawning qemu instance #{}", 0);
     core_affinity::set_for_current(core_ids[(0 + cpu_start) % core_ids.len()].clone());
-    let init_runner = NyxProcess::from_config(&sharedir.clone(), &nyx_config, 0 as u32, threads > 1).unwrap();
+    let init_runner = NyxProcess::new(&mut nyx_config, 0).unwrap();
     let runtime_bitmap_size = init_runner.bitmap_buffer_size();
     println!("[!] bitmap_buffer_size: {}", runtime_bitmap_size);
 
@@ -188,7 +193,8 @@ fn main() {
     }
 
     for i in 1..threads {
-        let nyx_config = nyx_config.clone();
+        let mut nyx_config = nyx_config.clone();
+        nyx_config.set_process_role(NyxProcessRole::Child);
 
         let spec = spec.clone();
         let queue = queue.clone();
@@ -209,8 +215,7 @@ fn main() {
             println!("[!] fuzzer: spawning qemu instance #{}", i);
             core_affinity::set_for_current(core_id);
 
-            let runner = NyxProcess::from_config(&sdir, &nyx_config, i as u32, true).unwrap();    
-
+            let mut runner = NyxProcess::new(&mut nyx_config, i).unwrap();
             let timeout = nyx_config.timeout().clone();
             let mut fuzzer = StructFuzzer::new(runner, nyx_config, fuzzer_config, spec, queue, thread_seed);
 

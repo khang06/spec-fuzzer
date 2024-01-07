@@ -266,11 +266,11 @@ impl Queue {
                 }
             }
         }
-        for (i,(_val,id)) in ijon_slot_to_fav.iter(){
+        for (_i,(_val,id)) in ijon_slot_to_fav.iter(){
             //use std::time::SystemTime;
-            println!("[!] store ijon {:?} for {} => {:x}",
+            //println!("[!] store ijon {:?} for {} => {:x}",
                 //SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs(),
-                id,i,_val);
+                //id,i,_val);
             if !favids.contains(id) { //TODO FIX O(n)
                 favids.push(*id); 
             }

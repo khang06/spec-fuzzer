@@ -34,12 +34,13 @@ pub struct InterpreterData{
 
 #[derive(Copy, Clone)]
 #[repr(C)]
+#[repr(align(2048))]
 pub struct IjonData {
     pub max_data: [u64;256],
 }
 
 #[derive(Copy, Clone)]
-#[repr(C, packed(1))]
+#[repr(C)]
 pub struct SharedFeedbackData{
     pub interpreter: InterpreterData,
     pad: [u8; 0x1000/2-std::mem::size_of::<InterpreterData>()],
