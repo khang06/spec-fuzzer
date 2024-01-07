@@ -16,8 +16,7 @@ use clap::{value_t, App, Arg, ArgMatches};
 
 use std::fs::File;
 
-use fuzz_runner::nyx::qemu_process_new_from_kernel;
-use fuzz_runner::nyx::qemu_process_new_from_snapshot;
+use fuzz_runner::nyx::qemu_process_new;
 use fuzz_runner::nyx::qemu_process::QemuProcess;
 
 use std::io::Read;
@@ -38,21 +37,21 @@ use fuzz_runner::nyx::aux_buffer::{NYX_CRASH, NYX_TIMEOUT, NYX_INPUT_WRITE, NYX_
 
 fn print_result(runner: &mut fuzz_runner::QemuProcess, target_file: &String){
     println!("\n{} {} {}", "**************", target_file.green().bold(), "**************");
-    print!("{}", format!("{:#?}", runner.aux.result).yellow());
+    print!("{}", format!("{:#?}", runner.aux_buffer().result).yellow());
 
-    if runner.aux.result.exec_result_code == NYX_CRASH || 
-        runner.aux.result.exec_result_code == NYX_INPUT_WRITE || 
-        runner.aux.result.exec_result_code == NYX_TIMEOUT || 
-        runner.aux.result.exec_result_code == NYX_ABORT{
-        println!("{}", str::from_utf8(&runner.aux.misc.data).unwrap().red());
+    if runner.aux_buffer().result.exec_result_code == NYX_CRASH || 
+        runner.aux_buffer().result.exec_result_code == NYX_INPUT_WRITE || 
+        runner.aux_buffer().result.exec_result_code == NYX_TIMEOUT || 
+        runner.aux_buffer().result.exec_result_code == NYX_ABORT{
+        println!("{}", str::from_utf8(&runner.aux_buffer().misc.data).unwrap().red());
     }
     println!("");
 }
 
 fn execute_path(runner: &mut fuzz_runner::QemuProcess, target_path: String, dump_payload_folder: &Option<String>, quite_mode: bool, workdir: &String) {
-    runner.aux.config.timeout_sec += 1;
+    runner.aux_buffer_mut().config.timeout_sec += 1;
     //runner.aux.config.timeout_usec = 100_000;
-    runner.aux.config.changed = 1;
+    runner.aux_buffer_mut().config.changed = 1;
 
     for entry in WalkDir::new(target_path)
                     .max_depth(2)
@@ -93,9 +92,9 @@ fn execute_path(runner: &mut fuzz_runner::QemuProcess, target_path: String, dump
 }
 
 fn execute_file(runner: &mut fuzz_runner::QemuProcess, target_file: &String, dump_payload_folder: &Option<String>, quite_mode: bool, workdir: &String) {
-    runner.aux.config.timeout_sec += 1;
+    runner.aux_buffer_mut().config.timeout_sec += 1;
     //runner.aux.config.timeout_usec = 100_000;
-    runner.aux.config.changed = 1;
+    runner.aux_buffer_mut().config.changed = 1;
 
     let mut f = File::open(target_file).expect("no file found");
     f.read(runner.payload).expect("buffer overflow");
@@ -208,32 +207,36 @@ fn main() {
         panic!("Neither a target_file nor a target_path has been specififed!");
     }
 
-    let cfg: Config = Config::new_from_sharedir(&sharedir).unwrap();
+    let mut cfg: Config = Config::new_from_sharedir(&sharedir).unwrap();
 
 
-    let mut config = cfg.fuzz;
-    let runner_cfg = cfg.runner;
+    //let mut config = cfg.fuzz;
+    //let runner_cfg = cfg.runner;
 
+    /*
     if let Ok(start_cpu_id) = value_t!(matches, "cpu_start", usize) {
         config.cpu_pin_start_at = start_cpu_id;
     }
+    */
 
     let quite_mode = matches.is_present("quiet");
 
     //println!("DUMP: {}", matches.value_of("dump_payload_folder").is_some());
-    config.dump_python_code_for_inputs = Some(matches.value_of("dump_payload_folder").is_some());
+    cfg.fuzz.dump_python_code_for_inputs = Some(matches.value_of("dump_payload_folder").is_some());
 
-    if config.dump_python_code_for_inputs.unwrap(){
+    if cfg.fuzz.dump_python_code_for_inputs.unwrap(){
         fs::create_dir_all(matches.value_of("dump_payload_folder").unwrap()).unwrap();
     }
 
-    config.workdir_path = format!("/tmp/debug_workdir_{}/", config.cpu_pin_start_at);
+    //config.workdir_path = format!("/tmp/debug_workdir_{}/", config.cpu_pin_start_at);
+    cfg.fuzz.workdir_path = format!("/tmp/debug_workdir/");
 
     let sdir = sharedir.clone();
 
-    QemuProcess::prepare_workdir(&config.workdir_path, config.seed_path.clone());
+    QemuProcess::prepare_workdir(&cfg.fuzz.workdir_path, cfg.fuzz.seed_path.clone());
 
 
+    /*
     match runner_cfg.clone() {
         FuzzRunnerConfig::QemuSnapshot(cfg) => {
             let mut runner = qemu_process_new_from_snapshot(sdir, &cfg, &config).unwrap();
@@ -248,4 +251,7 @@ fn main() {
         }
         //_ => unreachable!(),
     }
+    */
+    let mut runner = qemu_process_new(sdir, &cfg).unwrap();
+    execute(&mut runner, &matches, quite_mode, &cfg.fuzz.workdir_path);
 }
